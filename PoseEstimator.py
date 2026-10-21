@@ -20,30 +20,27 @@ class PoseEstimator(nn.Module):
 class AttentionLayer(nn.Module):
     def __init__(self):
         super().__init__()
-        self.self_attention = nn.MultiheadAttention(1024,16)
-        self.cross_attention = nn.MultiheadAttention(1024,16)
+        self.self_attention = nn.MultiheadAttention(1024,16, batch_first = True)
+        self.cross_attention = nn.MultiheadAttention(1024,16, batch_first = True)
         self.norm1  = nn.LayerNorm(1024)
         self.norm2 = nn.LayerNorm(1024)
         self.norm3 = nn.LayerNorm(1024)
         self.norm4 = nn.LayerNorm(1024)
-        self.ffn = nn.Sequential(nn.Linear(1024, 2048), nn.SiLU(), nn.LayerNorm(2048), nn.Linear(2048, 1536), nn.SiLU(), nn.LayerNorm(1536), nn.Linear(1536, 1024))
+        self.ffn1 = nn.Sequential(nn.Linear(1024, 4096), nn.GELU(), nn.Linear(4096, 1024))
+        self.ffn2 = nn.Sequential(nn.Linear(1024, 4096), nn.GELU(), nn.Linear(4096, 1024))
     def forward(self, fa, fb): # 1, 196, 1024
         stacked = torch.cat([fa,fb], dim = 0)
-        print(stacked.shape)
-        stacked = self.norm1(stacked)
-        stacked = stacked + self.self_attention(stacked, stacked, stacked)[0]
-        stacked = self.norm2(stacked)
-        stacked = stacked + self.ffn(stacked)
-        stacked = self.norm3(stacked)
+        norm = self.norm1(stacked)
+        stacked = stacked + self.self_attention(norm, norm, norm)[0]
+        stacked = stacked + self.ffn1(self.norm2(stacked))
 
-        fa, fb = stacked.chunk(2, dim = 0)
+        fa, fb = self.norm3(stacked).chunk(2, dim = 0)
 
         q = torch.cat([fa,fb], dim = 0)
         kv = torch.cat([fb, fa], dim = 0)
 
         x = self.cross_attention(q, kv, kv)[0]
         stacked = stacked + x
-        stacked = self.norm4(stacked)
-        stacked = stacked + self.ffn(stacked)
+        stacked = stacked + self.ffn2(self.norm4(stacked))
 
         return stacked.chunk(2, dim = 0)
