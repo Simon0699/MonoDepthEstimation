@@ -7,14 +7,14 @@ class PoseEstimator(nn.Module):
         self.final_mlp = nn.Sequential(nn.Linear(25088, 128), nn.SiLU(), nn.LayerNorm(128),nn.Linear(128,7))
         self.num_layers = num_layers
         self.layers = nn.ModuleList([AttentionLayer() for i in range(num_layers)])
-    def forward(self,features): # (2, 201, 1024)
-        fa, fb= features[:,5:,:].chunk(2, dim = 0)
+    def forward(self,features): # (B, 2, 201, 1024)
+        fa, fb= features[:, :,5:,:].chunk(2, dim = 1)
         for i in range(self.num_layers):
             fa, fb = self.layers[i](fa, fb)
-        total = torch.cat([fa.squeeze(0),fb.squeeze(0)], dim = 0)
+        total = torch.cat([fa.squeeze(1), fb.squeeze(1)], dim = 1)
         total = self.dim_reduce(total)
 
-        return self.final_mlp(total.flatten())
+        return self.final_mlp(total.flatten(1))
 
 
 class AttentionLayer(nn.Module):
@@ -28,8 +28,8 @@ class AttentionLayer(nn.Module):
         self.norm4 = nn.LayerNorm(1024)
         self.ffn1 = nn.Sequential(nn.Linear(1024, 4096), nn.GELU(), nn.Linear(4096, 1024))
         self.ffn2 = nn.Sequential(nn.Linear(1024, 4096), nn.GELU(), nn.Linear(4096, 1024))
-    def forward(self, fa, fb): # 1, 196, 1024
-        stacked = torch.cat([fa,fb], dim = 0)
+    def forward(self, fa, fb): # B, 1, 196, 1024
+        stacked = torch.cat([fa.squeeze(1),fb.squeeze(1)], dim = 0)
         norm = self.norm1(stacked)
         stacked = stacked + self.self_attention(norm, norm, norm)[0]
         stacked = stacked + self.ffn1(self.norm2(stacked))
@@ -43,4 +43,4 @@ class AttentionLayer(nn.Module):
         stacked = stacked + x
         stacked = stacked + self.ffn2(self.norm4(stacked))
 
-        return stacked.chunk(2, dim = 0)
+        return stacked.unsqueeze(1).chunk(2, dim = 0)
