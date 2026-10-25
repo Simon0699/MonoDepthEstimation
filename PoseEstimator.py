@@ -1,13 +1,26 @@
 import torch
 import torch.nn as nn 
+from transformers import AutoModel, AutoImageProcessor
+
 class PoseEstimator(nn.Module):
     def __init__(self, num_layers):
         super().__init__()
+        name = "facebook/dinov3-vitl16-pretrain-lvd1689m"
+        self.dino = AutoModel.from_pretrained(name)
+        self.proc = AutoImageProcessor.from_pretrained(name)
+
+        self.register_buffer("mean", torch.tensor(self.proc.image_mean).view(1,3,1,1))
+        self.register_buffer("std", torch.tensor(self.proc.image_std).view(1,3,1,1))
+
         self.dim_reduce = nn.Sequential(nn.Linear(1024,512), nn.SiLU(), nn.LayerNorm(512), nn.Linear(512, 256), nn.SiLU(), nn.LayerNorm(256), nn.Linear(256,128), nn.SiLU(), nn.LayerNorm(128), nn.Linear(128,64))
         self.final_mlp = nn.Sequential(nn.Linear(25088, 128), nn.SiLU(), nn.LayerNorm(128),nn.Linear(128,7))
         self.num_layers = num_layers
         self.layers = nn.ModuleList([AttentionLayer() for i in range(num_layers)])
-    def forward(self,features): # (B, 2, 201, 1024)
+    def forward(self,images): # B, 2, 3, 224, 224 
+        B = images.shape[0]
+        ims = (images.flatten(0,1) - self.mean)/self.std
+        features = self.dino(pixel_values = ims).last_hidden_state # (B, 2, 201, 1024)
+        features = features.view(B, 2, 201, 1024)
         fa, fb= features[:, :,5:,:].chunk(2, dim = 1)
         for i in range(self.num_layers):
             fa, fb = self.layers[i](fa, fb)
