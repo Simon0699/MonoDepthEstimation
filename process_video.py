@@ -2,7 +2,7 @@ from torchcodec.decoders import VideoDecoder
 import torchvision.transforms.functional as f
 import torch
 def process_video(video_url, write_file):
-    decoder = VideoDecoder(video_url)
+    decoder = VideoDecoder(video_url, num_ffmpeg_threads = 0)
     lend = len(decoder)
     i = 0
     avg_fps = (decoder.metadata.average_fps)

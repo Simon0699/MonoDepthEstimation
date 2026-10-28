@@ -222,3 +222,4 @@ __marimo__/
 # Project-specific
 HF_key.txt
 camera_calibration/
+training_data/

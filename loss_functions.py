@@ -26,17 +26,15 @@ class Losses(nn.Module):
         B = images.shape[0]
 
         inverse = 1/depth_maps
-        inverse = inverse/(inverse.mean(dim = (1,2)).view(B, -1, -1))
-        xdiff = (inverse[:, 2:, :] - inverse[:, :-2, :])/2
-        ydiff = (inverse[:, :, 2:] - inverse[:, :, :-2])/2
-        xdiff_mag_depth = xdiff.mean(dim = (1,2)) # (B) collapse over x and y 
-        ydiff_mag_depth = ydiff.mean(dim = (1,2)) # (B)
+        inverse = inverse/(inverse.mean(dim = (1,2)).view(B, 1, 1))
+        xdiff = torch.abs((inverse[:, 2:, :] - inverse[:, :-2, :])/2)
+        ydiff = torch.abs((inverse[:, :, 2:] - inverse[:, :, :-2])/2)
+       
 
-        image_x_diff = (images[:, :, 2:, : ] - images[:, :, :-2, :])/2
-        image_y_diff = (images[:, :, :, 2:] - images[:, :, :, :-2])/2
+        image_x_diff = torch.abs((images[:, :, 2:, : ] - images[:, :, :-2, :])/2)
+        image_y_diff = torch.abs((images[:, :, :, 2:] - images[:, :, :, :-2])/2)
 
-        xdiff_mag_image = image_x_diff.mean(dim = (1,2,3))
-        ydiff_mag_image = image_y_diff.mean(dim = (1,2,3))
+      
 
-        loss = xdiff_mag_depth * torch.exp(-xdiff_mag_image) + ydiff_mag_depth * torch.exp(-ydiff_mag_image)
+        loss = (xdiff * torch.exp(-image_x_diff.mean(dim = 1))).mean() + (ydiff * torch.exp(-image_y_diff.mean(dim = 1))).mean()
         return loss
